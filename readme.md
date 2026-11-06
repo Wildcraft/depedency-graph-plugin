@@ -36,8 +36,10 @@ org.wildcraft.plugin:dependency-graph-plugin
 
 ```bash
 mvn clean install
-mvn dependency-graph:generate
+mvn dependency-graph:generate -Ddependency.graph.depth=3 -Ddependency.graph.includeTransitive=true
 ```
+
+The `dependency.graph.depth` option controls how many dependency levels are included in the generated graph. The default is `3`, and it can be lowered or raised depending on the project size.
 
 Then open:
 

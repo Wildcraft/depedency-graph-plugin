@@ -30,6 +30,12 @@ public class DependencyGraphPlugin extends AbstractMojo {
    @Parameter(property = "dependency.graph.outputDirectory", defaultValue = "${project.build.directory}/dependency-graph")
    private File outputDirectory;
 
+   @Parameter(property = "dependency.graph.depth", defaultValue = "3")
+   private int depth;
+
+   @Parameter(property = "dependency.graph.includeTransitive", defaultValue = "true")
+   private boolean includeTransitive;
+
    @Override
    public void execute() throws MojoExecutionException {
        Map<String, Set<String>> dependencyGraph = buildDependencyGraph();
@@ -59,13 +65,26 @@ public class DependencyGraphPlugin extends AbstractMojo {
                }
            }
 
-           Set artifacts = mavenProject.getArtifacts();
-           if (artifacts != null) {
-               for (Object rawArtifact : artifacts) {
-                   Artifact artifact = (Artifact) rawArtifact;
-                   String artifactKey = moduleKey(artifact.getGroupId(), artifact.getArtifactId());
-                   graph.computeIfAbsent(artifactKey, ignored -> new LinkedHashSet<>());
-                   graph.get(currentModule).add(artifactKey);
+           if (includeTransitive) {
+               Set artifacts = mavenProject.getArtifacts();
+               if (artifacts != null) {
+                   for (Object rawArtifact : artifacts) {
+                       Artifact artifact = (Artifact) rawArtifact;
+                       String artifactKey = moduleKey(artifact.getGroupId(), artifact.getArtifactId());
+                       graph.computeIfAbsent(artifactKey, ignored -> new LinkedHashSet<>());
+                       graph.get(currentModule).add(artifactKey);
+
+                       if (depth > 1 && artifact.getDependencyTrail() != null) {
+                           for (Object rawTrail : artifact.getDependencyTrail()) {
+                               Artifact trailArtifact = (Artifact) rawTrail;
+                               String trailKey = moduleKey(trailArtifact.getGroupId(), trailArtifact.getArtifactId());
+                               graph.computeIfAbsent(trailKey, ignored -> new LinkedHashSet<>());
+                               if (!artifactKey.equals(trailKey)) {
+                                   graph.get(artifactKey).add(trailKey);
+                               }
+                           }
+                       }
+                   }
                }
            }
        }
