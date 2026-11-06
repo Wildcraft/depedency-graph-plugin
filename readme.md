@@ -53,6 +53,17 @@ window.dependencyGraphData = [
 ];
 ```
 
+## Example output from a real project
+
+The plugin was run against the Spring Petclinic sample project to validate the generated graph output.
+
+![Dependency graph generated from Spring Petclinic](./dependency-graph-example.png)
+
+```bash
+# from a sample Maven project such as spring-petclinic
+./mvnw org.wildcraft.plugin:dependency-graph-plugin:1.0.0:generate
+```
+
 ## Project status
 
 The project is release-ready for GitHub and Maven Central publication, with metadata and release configuration added to the POM.
