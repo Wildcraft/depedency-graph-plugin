@@ -38,11 +38,27 @@ public class DependencyGraphPlugin extends AbstractMojo {
 
    @Override
    public void execute() throws MojoExecutionException {
-       Map<String, Set<String>> dependencyGraph = buildDependencyGraph();
+       int effectiveDepth = Math.max(1, depth);
+       Map<String, Set<String>> dependencyGraph = buildDependencyGraph(effectiveDepth);
+
+       while (isSparseGraph(dependencyGraph) && effectiveDepth < 10) {
+           effectiveDepth++;
+           dependencyGraph = buildDependencyGraph(effectiveDepth);
+       }
+
        writeGraphFiles(dependencyGraph);
    }
 
-   private Map<String, Set<String>> buildDependencyGraph() {
+   private boolean isSparseGraph(Map<String, Set<String>> graph) {
+       int totalNodes = graph.size();
+       int totalEdges = 0;
+       for (Set<String> imports : graph.values()) {
+           totalEdges += imports.size();
+       }
+       return totalNodes <= 2 || totalEdges == 0;
+   }
+
+   private Map<String, Set<String>> buildDependencyGraph(int graphDepth) {
        Map<String, Set<String>> graph = new LinkedHashMap<>();
        List projects = project.getCollectedProjects();
        if (projects == null || projects.isEmpty()) {
@@ -74,7 +90,7 @@ public class DependencyGraphPlugin extends AbstractMojo {
                        graph.computeIfAbsent(artifactKey, ignored -> new LinkedHashSet<>());
                        graph.get(currentModule).add(artifactKey);
 
-                       if (depth > 1 && artifact.getDependencyTrail() != null) {
+                       if (graphDepth > 1 && artifact.getDependencyTrail() != null) {
                            for (Object rawTrail : artifact.getDependencyTrail()) {
                                Artifact trailArtifact = (Artifact) rawTrail;
                                String trailKey = moduleKey(trailArtifact.getGroupId(), trailArtifact.getArtifactId());
