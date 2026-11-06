@@ -10,6 +10,12 @@ This plugin:
 - writes a JavaScript data file for D3 rendering
 - generates an HTML page with a hierarchical edge-bundling visualization similar to the reference output used in the project notes
 
+### Selected D3 rendering pattern
+
+The plugin uses the hierarchical edge-bundling layout as the default visualization style because it scales best for large Java module ecosystems such as Spring and Hibernate.
+
+This style is the best fit for projects with many modules and a moderate-to-large dependency surface because it keeps the graph readable while preserving the relationships between modules.
+
 The generated output is placed under:
 
 ```text

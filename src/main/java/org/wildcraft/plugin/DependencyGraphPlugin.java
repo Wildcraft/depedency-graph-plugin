@@ -132,7 +132,7 @@ public class DependencyGraphPlugin extends AbstractMojo {
                "<html lang=\"en\">\n" +
                "<head>\n" +
                "  <meta charset=\"UTF-8\">\n" +
-               "  <title>Dependency Graph</title>\n" +
+               "  <title>Spring/Hibernate-style Dependency Graph</title>\n" +
                "  <style>\n" +
                "    body { margin: 0; background: #f3f4f6; font-family: Helvetica, Arial, sans-serif; }\n" +
                "    #chart { width: 100%; overflow: auto; padding: 20px; box-sizing: border-box; }\n" +
@@ -153,6 +153,9 @@ public class DependencyGraphPlugin extends AbstractMojo {
                "  </style>\n" +
                "</head>\n" +
                "<body>\n" +
+               "  <div style=\"padding: 16px 20px 0 20px; font-family: Helvetica, Arial, sans-serif; color: #374151;\">\n" +
+               "    <strong>Selected D3 pattern:</strong> hierarchical edge bundling, chosen for large Java module graphs like Spring and Hibernate-style multi-module systems.\n" +
+               "  </div>\n" +
                "  <div id=\"chart\" align=\"left\"></div>\n" +
                "  <script src=\"https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js\"></script>\n" +
                "  <script src=\"./dependency-graph-data.js\"></script>\n" +
