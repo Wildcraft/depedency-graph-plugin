@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dependency Graph</title>
+  <style>
+    :root { --bg: #f3f4f6; --panel: #fff; --text: #374151; --muted: #6b7280; --border: #e5e7eb; --accent: #1d4ed8; }
+    body { margin: 0; background: var(--bg); font-family: Helvetica, Arial, sans-serif; color: var(--text); line-height: 1.5; }
+    main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 40px; }
+    h1 { margin: 0; font-size: 28px; color: #111827; }
+    h2 { margin: 0 0 12px; font-size: 20px; color: #111827; }
+    h3 { margin: 28px 0 6px; font-size: 16px; color: #111827; }
+    .meta { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .meta code { font-size: 13px; }
+    section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-top: 20px; }
+    .guide ol { margin: 0; padding-left: 20px; }
+    .guide li { margin-bottom: 6px; }
+    .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin: 0 3px 0 2px; }
+    section.graph-card { position: relative; }
+    .zoom-controls { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; z-index: 1; }
+    .zoom-controls button { font: 600 16px Helvetica, Arial, sans-serif; min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: var(--text); cursor: pointer; }
+    .zoom-controls button.reset { font-size: 13px; }
+    .zoom-controls button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .zoom-controls button:disabled { opacity: .4; cursor: default; }
+    .controls { padding-right: 150px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; }
+    .module-picker select { font: 14px Helvetica, Arial, sans-serif; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: var(--text); }
+    .depth { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .depth button { font: 600 13px Helvetica, Arial, sans-serif; min-width: 36px; padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: var(--text); cursor: pointer; }
+    .depth button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .depth button:disabled { opacity: .4; cursor: default; }
+    .depth button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .depth .summary { margin-left: 6px; color: var(--muted); font-size: 13px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 24px; font-size: 14px; }
+    .legend span { display: inline-block; margin-right: 12px; }
+    /* The side margins leave room to scroll the page when the pointer is beside the chart */
+    svg.graph { display: block; width: calc(100% - 64px); height: min(80vh, 75vw); min-height: 320px; margin: 12px auto 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fbfbfa; cursor: grab; }
+    svg.graph:active { cursor: grabbing; }
+    @media (max-width: 600px) { svg.graph { width: calc(100% - 24px); } }
+    .node { font: 300 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: var(--muted); cursor: pointer; }
+    .node:hover { fill: #000; }
+    .node--project { fill: var(--accent); font-weight: 700; font-size: 13px; }
+    .node:hover, .node--focus, .node--dependency, .node--dependency-transitive, .node--dependent, .node--dependent-transitive { font-weight: 700; }
+    .node--focus { fill: #000; }
+    .node--dependency { fill: #d62728; }
+    .node--dependency-transitive { fill: #931919; }
+    .node--dependent { fill: #008000; }
+    .node--dependent-transitive { fill: #1ee232; }
+    .group-arc { fill: #e5e7eb; }
+    .link { stroke: steelblue; stroke-opacity: .25; fill: none; pointer-events: none; }
+    .link--dependency, .link--dependency-transitive, .link--dependent, .link--dependent-transitive { stroke-opacity: 1; stroke-width: 2px; }
+    .link--dependency { stroke: #d62728; }
+    .link--dependency-transitive { stroke: #931919; }
+    .link--dependent { stroke: #008000; }
+    .link--dependent-transitive { stroke: #1ee232; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+    .card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+    .card .value { font-size: 24px; font-weight: 700; color: #111827; }
+    .card .label { font-size: 13px; color: var(--muted); }
+    .explain { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+    dl.explain { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; }
+    .explain dt { font-weight: 700; color: var(--text); }
+    .explain dd { margin: 0; }
+    .table-tools { margin: 6px 0 8px; }
+    .table-tools input { font: 14px Helvetica, Arial, sans-serif; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; width: min(320px, 100%); }
+    .table-wrap { max-height: 520px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th:first-child, td:first-child, th.text, td.text { text-align: left; }
+    th { position: sticky; top: 0; background: #f9fafb; cursor: pointer; user-select: none; }
+    th.sorted-asc::after { content: " \25B2"; font-size: 10px; }
+    th.sorted-desc::after { content: " \25BC"; font-size: 10px; }
+    tbody tr:hover { background: #eff6ff; }
+    td.project { color: var(--accent); font-weight: 700; }
+    .note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+    .references ol { margin: 0; padding-left: 20px; font-size: 14px; }
+    .references li { margin-bottom: 6px; }
+    .references a { color: var(--accent); }
+    /* Diverging favorable (blue) to unfavorable (red) scale with a grey midpoint */
+    :root { --rate-0: #9ec5f4; --rate-1: #cde2fb; --rate-2: #f0efec; --rate-3: #f6c9c8; --rate-4: #ee9796; }
+    td.rate-0 { background: var(--rate-0); }
+    td.rate-1 { background: var(--rate-1); }
+    td.rate-2 { background: var(--rate-2); }
+    td.rate-3 { background: var(--rate-3); }
+    td.rate-4 { background: var(--rate-4); }
+    tbody tr:hover td { box-shadow: inset 0 1px 0 #1d4ed8, inset 0 -1px 0 #1d4ed8; }
+    .rating-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 4px 0 6px; font-size: 13px; }
+    .rating-scale { display: flex; align-items: center; gap: 6px; }
+    .rating-scale .steps { display: flex; }
+    .rating-scale .steps i { width: 34px; height: 14px; display: block; border: 1px solid #fff; }
+    .rating-legend .hint { color: var(--muted); }
+    th .better { font-weight: 400; color: var(--muted); margin-left: 3px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Dependency Graph of <span id="project-name">project</span></h1>
+    <p class="meta"><code id="project-coordinates"></code> <span id="project-generated"></span></p>
+  </header>
+
+  <section class="guide">
+    <h2>How to read this graph</h2>
+    <ol>
+      <li><strong>Each label on the ring is a Maven module</strong> (artifactId; hover for the full groupId and level). Modules with the same groupId sit together, marked by a grey arc. <span id="project-guide">The project itself, <strong id="project-name-guide">the project</strong>, is shown in</span> <span style="color:#1d4ed8;font-weight:700">blue</span>.</li>
+      <li><strong>Each line is a dependency</strong> from a module to a module it declares in its POM.</li>
+      <li><strong>Hover a module to trace it.</strong> <em>Incoming</em> lines show who uses it: <span class="swatch" style="background:#008000"></span>directly or <span class="swatch" style="background:#1ee232"></span>indirectly. These modules may be affected if it changes. <em>Outgoing</em> lines show what it needs: <span class="swatch" style="background:#d62728"></span>directly or <span class="swatch" style="background:#931919"></span>indirectly.</li>
+      <li id="module-guide" hidden><strong>Pick a module to focus on it.</strong> <em>All modules</em> shows the whole project, including how its modules depend on each other. Choosing one module redraws the chart for that module alone, and Depth then counts from it.</li>
+      <li><strong>Use Depth to peel the graph in layers.</strong> L1 shows only the project's direct dependencies; each further level adds the dependencies of the previous one. Start at L1 and step up with <strong>+</strong> to see where transitive dependencies come from.</li>
+      <li><strong>Look for hotspots.</strong> Modules with many incoming lines are hubs: upgrading them ripples through the graph. Modules with many outgoing lines pull in a lot. The statistics below rank them; hover a table row to find it in the graph.</li>
+    </ol>
+  </section>
+
+  <section class="graph-card">
+    <div class="zoom-controls" role="group" aria-label="Zoom">
+      <button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+      <button id="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>
+      <button id="zoom-reset" class="reset" title="Show the whole graph">Reset</button>
+    </div>
+    <div class="controls">
+      <div class="module-picker" id="module-picker" hidden><label for="module-select"><strong>Module:</strong></label> <select id="module-select"></select></div>
+      <div class="depth"><strong>Depth:</strong><button id="depth-less" title="Show one level less">&minus;</button><span id="depth-levels"></span><button id="depth-more" title="Show one level more">+</button><span class="summary" id="depth-summary"></span></div>
+      <div class="legend">
+        <div><strong>Incoming:</strong> <span><i class="swatch" style="background:#008000"></i>used by</span><span><i class="swatch" style="background:#1ee232"></i>used indirectly by</span></div>
+        <div><strong>Outgoing:</strong> <span><i class="swatch" style="background:#d62728"></i>depends on</span><span><i class="swatch" style="background:#931919"></i>depends on indirectly</span></div>
+      </div>
+    </div>
+    <svg class="graph" id="chart" role="img" aria-label="Dependency graph"></svg>
+    <p class="note">Use + / &minus; or scroll inside the chart to zoom, drag to pan, Reset to see the whole graph again. Scroll beside the chart to move through the page.</p>
+  </section>
+
+  <section class="stats">
+    <h2>Statistics</h2>
+    <p class="explain">Computed by the plugin over the full graph (all levels), regardless of the depth selected above. Also saved as <code>dependency-graph-metrics.json</code>.</p>
+    <div class="cards" id="summary-cards"></div>
+
+    <h3>Reading the colors</h3>
+    <div class="rating-legend">
+      <div class="rating-scale"><span>Most favorable</span><span class="steps"><i style="background:var(--rate-0)"></i><i style="background:var(--rate-1)"></i><i style="background:var(--rate-2)"></i><i style="background:var(--rate-3)"></i><i style="background:var(--rate-4)"></i></span><span>Least favorable</span></div>
+      <span class="hint"><strong>&darr;</strong> lower is better &nbsp; <strong>&uarr;</strong> higher is better</span>
+    </div>
+    <p class="explain">Rated columns are shaded by how each value ranks within its column: the best fifth of values are dark blue, the next fifth light blue, the middle grey, then light red, and the worst fifth dark red. Hover a cell to see its band. Columns without an arrow, such as instability on its own, have no better direction and are not shaded.</p>
+
+    <h3>Coupling by module</h3>
+    <dl class="explain">
+      <dt>Ca</dt><dd>afferent coupling: modules that depend on it directly</dd>
+      <dt>Ce</dt><dd>efferent coupling: modules it depends on directly</dd>
+      <dt>I</dt><dd>instability = Ce / (Ca + Ce): 0 is depended on and stable, 1 only depends on others</dd>
+      <dt>Impact</dt><dd>modules that depend on it directly or indirectly</dd>
+      <dt>Footprint</dt><dd>modules it pulls in directly or indirectly</dd>
+    </dl>
+    <div class="table-tools"><input id="module-filter" type="search" placeholder="Filter modules or groups" aria-label="Filter modules"></div>
+    <div class="table-wrap"><table id="module-table"></table></div>
+
+    <h3>Cohesion by group (groupId)</h3>
+    <dl class="explain">
+      <dt>Internal</dt><dd>dependencies between modules of the same group</dd>
+      <dt>Ca / Ce</dt><dd>dependencies coming into / going out of the group</dd>
+      <dt>H</dt><dd>relational cohesion = (Internal + 1) / Modules: higher means the group's modules work more closely together</dd>
+      <dt>Internal share</dt><dd>Internal / (Internal + Ce): share of the group's dependencies that stay inside it</dd>
+      <dt>&mdash;</dt><dd>cohesion does not apply to a group with a single module; those groups are left out of the H and Internal share ranking</dd>
+    </dl>
+    <div class="table-wrap"><table id="group-table"></table></div>
+    <p class="note">These are module-level (package-level) metrics computed from Maven metadata. They are not the Chidamber &amp; Kemerer (CK) suite: CK metrics such as coupling between objects (CBO) and lack of cohesion in methods (LCOM) are measured per class and need bytecode analysis, so they are not included.</p>
+  </section>
+
+  <section class="references">
+    <h2>References</h2>
+    <ol>
+      <li>Robert C. Martin, &ldquo;OO Design Quality Metrics: An Analysis of Dependencies&rdquo;, 1994; and <cite>Agile Software Development: Principles, Patterns, and Practices</cite>, Prentice Hall, 2002. Afferent coupling (Ca), efferent coupling (Ce) and instability (I).</li>
+      <li>Alan MacCormack, John Rusnak and Carliss Y. Baldwin, &ldquo;Exploring the Structure of Complex Software Designs: An Empirical Study of Open Source and Proprietary Code&rdquo;, <cite>Management Science</cite> 52(7), 2006. Propagation cost.</li>
+      <li>NDepend, <a href="https://www.ndepend.com/docs/code-metrics" rel="noopener">Code Metrics</a>. Relational cohesion (H).</li>
+      <li>Shyam R. Chidamber and Chris F. Kemerer, &ldquo;A Metrics Suite for Object Oriented Design&rdquo;, <cite>IEEE Transactions on Software Engineering</cite> 20(6), 1994. Class-level metrics (CBO, LCOM and others), not computed by this report.</li>
+      <li>Kirk Knoernschild, <cite>Java Application Architecture: Modularity Patterns with Examples Using OSGi</cite>, Prentice Hall, 2012.</li>
+      <li>Danny Holten, &ldquo;Hierarchical Edge Bundles: Visualization of Adjacency Relations in Hierarchical Data&rdquo;, <cite>IEEE Transactions on Visualization and Computer Graphics</cite> 12(5), 2006; and Mike Bostock, <a href="https://bl.ocks.org/mbostock/7607999" rel="noopener">Hierarchical Edge Bundling</a> (D3 example).</li>
+      <li>Wildcraft, <a href="https://wildcraft.github.io/page3/" rel="noopener">Java 9 &ndash; JDK Module Dependencies</a>, 2017. The chart this report is modelled on.</li>
+    </ol>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+<script src="./dependency-graph-data.js"></script>
+<script>
+  var myData = window.dependencyGraphData || [];
+  var projectInfo = window.dependencyGraphProject || {};
+  var metrics = window.dependencyGraphMetrics || { summary: {}, modules: [], groups: [] };
+  var dataByName = {};
+  myData.forEach(function(d) { dataByName[d.name] = d; });
+
+  var projectName = projectInfo.name || projectInfo.artifactId || "project";
+  document.title = "Dependency Graph of " + projectName;
+  d3.select("#project-name").text(projectName);
+  d3.select("#project-name-guide").text(projectName);
+  d3.select("#project-coordinates").text([projectInfo.groupId, projectInfo.artifactId, projectInfo.version].filter(Boolean).join(":"));
+  d3.select("#project-generated").text(projectInfo.generated ? "· generated " + projectInfo.generated : "");
+
+  // ---- Graph ----
+  // Multi-module builds: "All modules" uses the plugin's levels (distance from the nearest module of the project);
+  // a single module's view uses the distance from that module instead.
+  var projectModules = myData.filter(function(d) { return d.project; }).sort(function(a, b) { return d3.ascending(a.label, b.label); });
+  var PROJECT_WORD = projectModules.length > 1 ? "Module" : "Project";
+  var currentModule = null;
+  var levelOf = {};
+  function computeLevels() {
+    levelOf = {};
+    if (!currentModule) {
+      myData.forEach(function(d) { levelOf[d.name] = d.level; });
+      return;
+    }
+    var queue = [currentModule];
+    levelOf[currentModule] = 0;
+    while (queue.length) {
+      var name = queue.shift(), d = dataByName[name];
+      (d && d.imports || []).forEach(function(target) {
+        if (levelOf[target] === undefined) { levelOf[target] = levelOf[name] + 1; queue.push(target); }
+      });
+    }
+  }
+  computeLevels();
+  var maxLevel = 1;
+  var currentLevel = Math.max(1, window.dependencyGraphDepth || 3);
+  try {
+    var fromHash = /L(\d+)/.exec(location.hash), moduleFromHash = /module=([^&]+)/.exec(location.hash);
+    if (moduleFromHash && dataByName[decodeURIComponent(moduleFromHash[1])] && dataByName[decodeURIComponent(moduleFromHash[1])].project) { currentModule = decodeURIComponent(moduleFromHash[1]); computeLevels(); }
+    if (fromHash) { currentLevel = Math.max(1, +fromHash[1]); }
+  } catch (e) {}
+  if (projectModules.length > 1) {
+    d3.select("#module-picker").attr("hidden", null);
+    d3.select("#module-guide").attr("hidden", null);
+    d3.select("#project-guide").html("The project's " + projectModules.length + " modules are shown in");
+    var select = d3.select("#module-select");
+    select.append("option").attr("value", "").text("All modules (" + projectModules.length + ")");
+    select.selectAll("option.module").data(projectModules).enter().append("option").attr("class", "module").attr("value", function(d) { return d.name; }).text(function(d) { return d.label; });
+    select.property("value", currentModule || "");
+    // Keep the depth the reader chose, even if a module with fewer levels was shown in between
+    select.on("change", function() { currentModule = this.value || null; computeLevels(); setLevel(requestedLevel, true); });
+  }
+  var canvas = d3.select("#chart");
+  var svg = canvas.append("g");
+  var highlight = function() {}, clearHighlight = function() {};
+  var MIN_ZOOM = 0.5, MAX_ZOOM = 8;
+  var zoom = d3.behavior.zoom().scaleExtent([MIN_ZOOM, MAX_ZOOM]).on("zoom", function() {
+    svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+    d3.select("#zoom-in").property("disabled", d3.event.scale >= MAX_ZOOM);
+    d3.select("#zoom-out").property("disabled", d3.event.scale <= MIN_ZOOM);
+  });
+  canvas.call(zoom);
+  // The viewBox is centred on the graph, so scaling the translation keeps the zoom centred too
+  function zoomTo(scale, translate) {
+    zoom.scale(scale).translate(translate);
+    canvas.transition().duration(250).call(zoom.event);
+  }
+  function zoomBy(factor) {
+    var from = zoom.scale(), to = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, from * factor)), t = zoom.translate();
+    zoomTo(to, [t[0] * to / from, t[1] * to / from]);
+  }
+  d3.select("#zoom-in").on("click", function() { zoomBy(1.5); });
+  d3.select("#zoom-out").on("click", function() { zoomBy(1 / 1.5); });
+  d3.select("#zoom-reset").on("click", function() { zoomTo(1, [0, 0]); });
+  function drawLevelButtons() {
+    maxLevel = Math.max(1, d3.max(myData, function(d) { return levelOf[d.name]; }) || 1);
+    var buttons = d3.select("#depth-levels").selectAll("button").data(d3.range(1, maxLevel + 1));
+    buttons.exit().remove();
+    buttons.enter().append("button").on("click", function(l) { setLevel(l); });
+    buttons.text(function(l) { return "L" + l; }).attr("title", function(l) { return l === 1 ? "Direct dependencies only" : "Dependencies up to " + l + " levels deep"; });
+  }
+  d3.select("#depth-less").on("click", function() { setLevel(currentLevel - 1); });
+  d3.select("#depth-more").on("click", function() { setLevel(currentLevel + 1); });
+  var requestedLevel = currentLevel;
+  function setLevel(level, keepRequest) {
+    drawLevelButtons();
+    currentLevel = Math.min(maxLevel, Math.max(1, level));
+    if (!keepRequest) { requestedLevel = currentLevel; }
+    try { history.replaceState(null, "", "#L" + currentLevel + (currentModule ? "&module=" + encodeURIComponent(currentModule) : "")); } catch (e) {}
+    render();
+  }
+  function render() {
+    d3.selectAll("#depth-levels button").classed("active", function(l) { return l === currentLevel; });
+    d3.select("#depth-less").property("disabled", currentLevel <= 1);
+    d3.select("#depth-more").property("disabled", currentLevel >= maxLevel);
+    svg.selectAll("*").remove();
+    var visible = myData.filter(function(d) { return levelOf[d.name] !== undefined && levelOf[d.name] <= currentLevel; });
+    var root = { name: "", children: [] };
+    var groupByName = {};
+    visible.forEach(function(d) {
+      var groupName = d.group || "other";
+      if (!groupByName[groupName]) {
+        groupByName[groupName] = { name: groupName, children: [] };
+        root.children.push(groupByName[groupName]);
+      }
+      groupByName[groupName].children.push({ name: d.name, label: d.label || d.name, level: levelOf[d.name], project: !!d.project, imports: d.imports || [] });
+    });
+    root.children.sort(function(a, b) { return d3.ascending(a.name, b.name); });
+    root.children.forEach(function(g) { g.children.sort(function(a, b) { return d3.ascending(a.label, b.label); }); });
+    var cluster = d3.layout.cluster().size([360, 1]).sort(null);
+    var nodes = cluster.nodes(root);
+    var leaves = nodes.filter(function(d) { return !d.children; });
+    var leafByName = {};
+    leaves.forEach(function(d) { leafByName[d.name] = d; });
+    var maxLabel = d3.max(leaves, function(d) { return d.label.length; }) || 0;
+    var innerRadius = Math.max(220, leaves.length * 15 / (2 * Math.PI));
+    var radius = innerRadius + maxLabel * 6 + 30, diameter = radius * 2;
+    canvas.attr("viewBox", [-radius, -radius, diameter, diameter].join(" "));
+    nodes.forEach(function(d) { d.y = d.y * innerRadius; });
+    var links = [];
+    leaves.forEach(function(d) { d.imports.forEach(function(name) { if (leafByName[name] && leafByName[name] !== d) { links.push({ source: d, target: leafByName[name] }); } }); });
+    d3.select("#depth-summary").text((currentModule ? dataByName[currentModule].label + " \u00b7 " : "") + "L" + currentLevel + " of L" + maxLevel + ": " + leaves.length + " modules, " + links.length + " dependencies");
+    var bundle = d3.layout.bundle();
+    var line = d3.svg.line.radial().interpolate("bundle").tension(.85).radius(function(d) { return d.y; }).angle(function(d) { return d.x / 180 * Math.PI; });
+    var arc = d3.svg.arc().innerRadius(innerRadius - 4).outerRadius(innerRadius - 1);
+    var step = 360 / leaves.length / 2;
+    svg.append("g").selectAll(".group-arc").data(root.children).enter().append("path").attr("class", "group-arc").attr("d", function(g) { var first = g.children[0].x, last = g.children[g.children.length - 1].x; return arc({ startAngle: (first - step) / 180 * Math.PI, endAngle: (last + step) / 180 * Math.PI }); }).append("title").text(function(g) { return g.name; });
+    var link = svg.append("g").selectAll(".link").data(bundle(links)).enter().append("path").each(function(d) { d.source = d[0]; d.target = d[d.length - 1]; }).attr("class", "link").attr("d", line);
+    var node = svg.append("g").selectAll(".node").data(leaves).enter().append("text").attr("class", function(d) { return d.project ? "node node--project" : "node"; }).attr("dy", ".31em").attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + (d.y + 8) + ",0)" + (d.x < 180 ? "" : "rotate(180)"); }).style("text-anchor", function(d) { return d.x < 180 ? "start" : "end"; }).text(function(d) { return d.label; }).on("mouseover", mouseovered).on("mouseout", mouseouted);
+    var dependenciesOf = {}, dependentsOf = {};
+    links.forEach(function(l) {
+      (dependenciesOf[l.source.name] = dependenciesOf[l.source.name] || []).push(l.target);
+      (dependentsOf[l.target.name] = dependentsOf[l.target.name] || []).push(l.source);
+    });
+    function reachable(start, adjacency) {
+      var seen = {}, queue = (adjacency[start.name] || []).slice();
+      while (queue.length) {
+        var n = queue.shift();
+        if (n === start || seen[n.name]) continue;
+        seen[n.name] = true;
+        queue = queue.concat(adjacency[n.name] || []);
+      }
+      return seen;
+    }
+    node.append("title").text(function(d) { return (d.project ? PROJECT_WORD + (d.level ? " L" + d.level : "") : "L" + d.level) + " · " + d.name + " (" + Object.keys(reachable(d, dependentsOf)).length + " incoming, " + Object.keys(reachable(d, dependenciesOf)).length + " outgoing at this depth)"; });
+    function mouseovered(d) {
+      var dependencies = reachable(d, dependenciesOf), dependents = reachable(d, dependentsOf);
+      link.classed("link--dependency", function(l) { return l.source === d; })
+          .classed("link--dependency-transitive", function(l) { return l.source !== d && !!dependencies[l.source.name]; })
+          .classed("link--dependent", function(l) { return l.target === d; })
+          .classed("link--dependent-transitive", function(l) { return l.target !== d && !!dependents[l.target.name]; })
+          .filter(function(l) { return l.source === d || l.target === d || dependencies[l.source.name] || dependents[l.target.name]; })
+          .each(function() { this.parentNode.appendChild(this); });
+      node.classed("node--focus", function(n) { return n === d; })
+          .classed("node--dependency", function(n) { return (dependenciesOf[d.name] || []).indexOf(n) >= 0; })
+          .classed("node--dependency-transitive", function(n) { return dependencies[n.name] && (dependenciesOf[d.name] || []).indexOf(n) < 0; })
+          .classed("node--dependent", function(n) { return (dependentsOf[d.name] || []).indexOf(n) >= 0; })
+          .classed("node--dependent-transitive", function(n) { return dependents[n.name] && (dependentsOf[d.name] || []).indexOf(n) < 0; });
+    }
+    function mouseouted() {
+      link.classed("link--dependency link--dependency-transitive link--dependent link--dependent-transitive", false);
+      node.classed("node--focus node--dependency node--dependency-transitive node--dependent node--dependent-transitive", false);
+    }
+    highlight = function(name) { if (leafByName[name]) { mouseovered(leafByName[name]); } };
+    clearHighlight = mouseouted;
+  }
+  setLevel(currentLevel, true);
+
+  // ---- Statistics ----
+  function fixed(value, digits) { return (+value).toFixed(digits); }
+  function percent(value) { return (value * 100).toFixed(1) + "%"; }
+  var summary = metrics.summary;
+  var cards = [
+    [summary.modules, "dependencies in total"],
+  ].concat(summary.projectModules > 1 ? [[summary.projectModules, "modules in this project"]] : []).concat([
+    [summary.directDependencies, summary.projectModules > 1 ? "direct external dependencies (L1)" : "direct dependencies (L1)"],
+    [summary.transitiveDependencies, "transitive dependencies"],
+    ["L" + summary.maxLevel, "deepest level"],
+    [summary.dependencyEdges, "dependency links"],
+    [summary.groups, "groupIds"],
+    [fixed(summary.averageCe, 2), "average Ce per module"],
+    [percent(summary.density), "graph density (links / possible links)"],
+    [percent(summary.propagationCost), "propagation cost (average share of the graph each module reaches)"]
+  ]);
+  d3.select("#summary-cards").selectAll(".card").data(cards).enter().append("div").attr("class", "card").html(function(c) { return '<div class="value"></div><div class="label"></div>'; }).each(function(c) { d3.select(this).select(".value").text(c[0]); d3.select(this).select(".label").text(c[1]); });
+
+  var RATING_NAMES = ["most favorable fifth", "favorable", "middle", "unfavorable", "least favorable fifth"];
+  // Band 0 (most favorable) to 4 (least favorable) from the value's mid-rank percentile within its column,
+  // so ties (for example the many modules with Ce 0) share a band instead of being split arbitrarily.
+  function ratingBands(rows, key, better, applies) {
+    var values = rows.map(function(r) { return +r[key]; });
+    var n = values.length;
+    var min = d3.min(values), max = d3.max(values);
+    return function(r) {
+      if (applies && !applies(r)) { return null; }
+      if (min === max) { return 2; }
+      var v = +r[key], below = 0, equal = 0;
+      values.forEach(function(x) { if (x < v) { below++; } else if (x === v) { equal++; } });
+      var percentile = (below + equal / 2) / n;
+      if (better === "higher") { percentile = 1 - percentile; }
+      return Math.min(4, Math.floor(percentile * 5));
+    };
+  }
+
+  function sortableTable(selector, rows, columns, sortKey, onRow) {
+    var table = d3.select(selector);
+    var state = { key: sortKey, desc: true, filter: "" };
+    var bands = {};
+    columns.forEach(function(c) { if (c.better) { bands[c.key] = ratingBands(rows.filter(function(r) { return !c.applies || c.applies(r); }), c.key, c.better, c.applies); } });
+    table.append("thead").append("tr").selectAll("th").data(columns).enter().append("th").attr("class", function(c) { return c.text ? "text" : null; }).attr("title", function(c) { return (c.title || c.label) + (c.better ? (c.better === "lower" ? " (lower is better)" : " (higher is better)") : ""); }).text(function(c) { return c.label; }).each(function(c) { if (c.better) { d3.select(this).append("span").attr("class", "better").text(c.better === "lower" ? "\u2193" : "\u2191"); } }).on("click", function(c) { state.desc = state.key === c.key ? !state.desc : !c.text; state.key = c.key; draw(); });
+    var tbody = table.append("tbody");
+    function draw() {
+      table.selectAll("th").classed("sorted-asc", function(c) { return c.key === state.key && !state.desc; }).classed("sorted-desc", function(c) { return c.key === state.key && state.desc; });
+      var shown = rows.filter(function(r) { return !state.filter || (r.label + " " + r.name).toLowerCase().indexOf(state.filter) >= 0; });
+      shown.sort(function(a, b) { var x = a[state.key], y = b[state.key]; var order = typeof x === "string" ? d3.ascending(x, y) : x - y; return state.desc ? -order : order; });
+      var tr = tbody.selectAll("tr").data(shown, function(r) { return r.name; });
+      tr.exit().remove();
+      tr.enter().append("tr").on("mouseenter", function(r) { if (onRow) onRow(r); }).on("mouseleave", function() { if (onRow) clearHighlight(); }).selectAll("td").data(function(r) { return columns.map(function(c) { return { c: c, r: r }; }); }).enter().append("td").attr("class", function(d) { return (d.c.text ? "text" : "") + (d.r.project && d.c.key === "label" ? " project" : "") + (bands[d.c.key] && bands[d.c.key](d.r) !== null ? " rate-" + bands[d.c.key](d.r) : ""); }).attr("title", function(d) { if (d.c.key === "label") { return d.r.name; } if (d.c.applies && !d.c.applies(d.r)) { return d.c.notApplicable; } return bands[d.c.key] ? d.c.label + " " + d.r[d.c.key] + ": " + RATING_NAMES[bands[d.c.key](d.r)] : null; }).text(function(d) { if (d.c.applies && !d.c.applies(d.r)) { return "\u2014"; } return d.c.format ? d.c.format(d.r[d.c.key]) : d.r[d.c.key]; });
+      tr.order();
+    }
+    draw();
+    return function(filter) { state.filter = filter.toLowerCase(); draw(); };
+  }
+
+  var moduleRows = metrics.modules.map(function(m) { var d = dataByName[m.name] || {}; m.label = d.label || m.name; m.levelLabel = m.project ? "Project" : "L" + m.level; return m; });
+  var filterModules = sortableTable("#module-table", moduleRows, [
+    { key: "label", label: "Module", text: true },
+    { key: "group", label: "Group", text: true },
+    { key: "level", label: "Level", format: function(v) { return v === 0 ? PROJECT_WORD : "L" + v; } },
+    { key: "ca", label: "Ca", title: "Afferent coupling: modules that depend on it directly", better: "lower" },
+    { key: "ce", label: "Ce", title: "Efferent coupling: modules it depends on directly", better: "lower" },
+    { key: "instability", label: "I", title: "Instability = Ce / (Ca + Ce)", format: function(v) { return fixed(v, 2); } },
+    { key: "transitiveCa", label: "Impact", title: "Modules that depend on it directly or indirectly", better: "lower" },
+    { key: "transitiveCe", label: "Footprint", title: "Modules it pulls in directly or indirectly", better: "lower" }
+  ], "transitiveCa", function(r) { highlight(r.name); });
+  d3.select("#module-filter").on("input", function() { filterModules(this.value); });
+
+  var SINGLE_MODULE = "Single-module group: there are no internal dependencies to measure";
+  function multiModule(g) { return g.modules > 1; }
+  var groupRows = metrics.groups.map(function(g) { g.label = g.name; return g; });
+  sortableTable("#group-table", groupRows, [
+    { key: "label", label: "Group", text: true },
+    { key: "modules", label: "Modules" },
+    { key: "internal", label: "Internal", title: "Dependencies between modules of the group" },
+    { key: "ca", label: "Ca", title: "Dependencies coming into the group", better: "lower" },
+    { key: "ce", label: "Ce", title: "Dependencies going out of the group", better: "lower" },
+    { key: "instability", label: "I", title: "Instability = Ce / (Ca + Ce)", format: function(v) { return fixed(v, 2); } },
+    { key: "relationalCohesion", label: "H", title: "Relational cohesion = (Internal + 1) / Modules", better: "higher", applies: multiModule, notApplicable: SINGLE_MODULE, format: function(v) { return fixed(v, 2); } },
+    { key: "cohesionRatio", label: "Internal share", title: "Internal / (Internal + Ce)", better: "higher", applies: multiModule, notApplicable: SINGLE_MODULE, format: percent }
+  ], "modules");
+</script>
+</body>
+</html>

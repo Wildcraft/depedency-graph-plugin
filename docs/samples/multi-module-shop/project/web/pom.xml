@@ -1,0 +1,5 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+  <parent><groupId>demo.shop</groupId><artifactId>shop-parent</artifactId><version>1.0</version></parent>
+  <artifactId>web</artifactId><name>Shop web</name>
+  <dependencies><dependency><groupId>demo.shop</groupId><artifactId>application</artifactId><version>1.0</version></dependency><dependency><groupId>org.springframework</groupId><artifactId>spring-web</artifactId><version>6.1.10</version></dependency></dependencies>
+</project>
