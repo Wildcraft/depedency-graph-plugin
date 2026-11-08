@@ -94,7 +94,7 @@ with files:
 Run the goal once from the root of a multi-module build:
 
 ```bash
-mvn org.wildcraft.plugin:dependency-graph-plugin:1.0.0:generate
+mvn io.github.wildcraft:dependency-graph-plugin:1.0.0:generate
 ```
 
 The plugin runs once for the whole build (it is an aggregator) and writes a single report to the root's `target/dependency-graph/`. The modules do not need to be built or installed first: the plugin reads the dependency structure from the POMs, so a module that depends on a sibling module works straight from a fresh checkout. Parent and aggregator POMs (packaging `pom`) are left out of the graph.
@@ -109,17 +109,29 @@ This was tested on a three-module build (`web` → `application` → `domain`) r
 ## Plugin coordinates
 
 ```text
-org.wildcraft.plugin:dependency-graph-plugin
+io.github.wildcraft:dependency-graph-plugin
 ```
 
 ## Build and run
 
+Install the plugin from this repository, then run it from the project you want to analyze:
+
 ```bash
 mvn clean install
-mvn dependency-graph:generate -Ddependency.graph.depth=3 -Ddependency.graph.includeTransitive=true
+mvn io.github.wildcraft:dependency-graph-plugin:1.0.0:generate -Ddependency.graph.depth=3 -Ddependency.graph.includeTransitive=true
 ```
 
 Requires Java 17+.
+
+To use the short form `mvn dependency-graph:generate`, add the group to `~/.m2/settings.xml`:
+
+```xml
+<settings>
+  <pluginGroups>
+    <pluginGroup>io.github.wildcraft</pluginGroup>
+  </pluginGroups>
+</settings>
+```
 
 | Property | Default | Description |
 | --- | --- | --- |
@@ -179,7 +191,7 @@ For Petclinic and DDDSample, every dependency that `mvn dependency:list` resolve
 To reproduce a report, install this plugin (`mvn install` in this repository), then run it from the sample project's directory:
 
 ```bash
-./mvnw org.wildcraft.plugin:dependency-graph-plugin:1.0.0:generate
+./mvnw io.github.wildcraft:dependency-graph-plugin:1.0.0:generate
 ```
 
 ### Spring Petclinic

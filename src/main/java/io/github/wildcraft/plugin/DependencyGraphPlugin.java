@@ -1,4 +1,4 @@
-package org.wildcraft.plugin;
+package io.github.wildcraft.plugin;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;

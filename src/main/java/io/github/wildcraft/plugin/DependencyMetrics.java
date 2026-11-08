@@ -1,4 +1,4 @@
-package org.wildcraft.plugin;
+package io.github.wildcraft.plugin;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
